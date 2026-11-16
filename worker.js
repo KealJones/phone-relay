@@ -1,7 +1,7 @@
 
 const json = (o, s = 200, h = {}) => new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json', ...h } });
 
-const INSTRUCTIONS = "Drives a real browser tab on Keal's phone (mobile Safari) through a relay. The phone opens the harness page, which has a full-screen 'stage' iframe. Typical flow: list_devices -> set_html (write a test page) or open_url -> run_js / snapshot / click / type / screenshot -> get_logs. run_js code is the body of an async function; `return` a JSON-able value. You see snapshots, not live video. If the phone locks or Safari is backgrounded the device goes offline until it is foregrounded again. An unexpected page reload after heavy work usually means iOS killed the tab for memory; get_logs flags it.";
+const INSTRUCTIONS = "Drives a real browser tab on a phone (mobile Safari) through a relay. The phone opens the harness page, which has a full-screen 'stage' iframe. Typical flow: list_devices -> set_html (write a test page) or open_url -> run_js / snapshot / click / type / screenshot -> get_logs. run_js code is the body of an async function; `return` a JSON-able value. You see snapshots, not live video. If the phone locks or Safari is backgrounded the device goes offline until it is foregrounded again. An unexpected page reload after heavy work usually means iOS killed the tab for memory; get_logs flags it.";
 
 const DEV = { type: 'string', description: 'Device id or name from list_devices. Defaults to the most recently active online device.' };
 const TGT = { type: 'string', enum: ['auto', 'page', 'frame'], description: '"frame" = the stage iframe (content from set_html/open_url); "page" = the host page itself. "auto" (default) = frame if it holds a same-origin document, else page.' };
@@ -18,7 +18,7 @@ const TOOLS = [
   { name: 'set_html', description: 'Load an HTML document you write into the stage iframe (srcdoc, same-origin, so run_js/snapshot can reach it). Console output and errors from it are captured from the first line. Use it to build test pages (WebGPU, wasm, model loading, layout).', inputSchema: { type: 'object', properties: { html: { type: 'string' }, wait_ms: { type: 'number', description: 'Max wait for load (default 15000)' }, device: DEV, timeout_ms: TMO }, required: ['html'] } },
   { name: 'open_url', description: 'Load a URL in the stage iframe. Cross-origin pages are visible on the phone but not readable (and many sites refuse framing). top:true navigates the whole tab instead, which drops the connection unless the destination also loads agent.js.', inputSchema: { type: 'object', properties: { url: { type: 'string' }, top: { type: 'boolean' }, wait_ms: { type: 'number' }, device: DEV, timeout_ms: TMO }, required: ['url'] } },
   { name: 'reload', description: 'Reload the phone tab (it reconnects on its own in a few seconds).', inputSchema: { type: 'object', properties: { device: DEV } } },
-  { name: 'say', description: 'Show a message card over the phone page (Keal keeps the tab in front, so this is how to talk to him mid-test). Optional quick-reply buttons; he can also type a reply. His replies arrive in get_logs with src "keal".', inputSchema: { type: 'object', properties: { text: { type: 'string' }, buttons: { type: 'array', items: { type: 'string' } }, device: DEV, timeout_ms: TMO }, required: ['text'] } },
+  { name: 'say', description: 'Show a message card over the phone page (the person keeps the tab in front, so this is how to talk to them mid-test). Optional quick-reply buttons; they can also type a reply. Replies arrive in get_logs with src "user".', inputSchema: { type: 'object', properties: { text: { type: 'string' }, buttons: { type: 'array', items: { type: 'string' } }, device: DEV, timeout_ms: TMO }, required: ['text'] } },
   { name: 'get_logs', description: 'Console output, uncaught errors, rejections and lifecycle notes captured on the phone (page and stage). Use `since` with the returned lastSeq to get only new entries.', inputSchema: { type: 'object', properties: { since: { type: 'number' }, limit: { type: 'number', description: 'default 200' }, clear: { type: 'boolean' }, device: DEV } } },
 ];
 const FORWARD = new Set(['say', 'device_info', 'run_js', 'snapshot', 'click', 'type', 'screenshot', 'set_html', 'open_url', 'reload']);
@@ -223,7 +223,7 @@ function agentMain() {
     }));
   }
 
-  // CSP without 'unsafe-eval' (Squiggle): load the code as a script from the relay's /run.js instead ('self' on the mirror).
+  // CSP without 'unsafe-eval': load the code as a script from the relay's /run.js instead ('self' on the mirror).
   function viaScript(c, code) {
     return new Promise((res, rej) => {
       const rid = 'r' + Math.random().toString(36).slice(2);
@@ -234,7 +234,7 @@ function agentMain() {
       (c.doc.head || c.doc.documentElement).appendChild(s);
     });
   }
-  // Messages from Claude drawn over the page, so Keal can keep the tab in front. Replies land in get_logs (src "keal").
+  // Messages from Claude drawn over the page, so the person can keep the tab in front. Replies land in get_logs (src "user").
   let sayBox = null;
   function say(text, buttons) {
     if (!sayBox || !sayBox.isConnected) {
@@ -251,7 +251,7 @@ function agentMain() {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center';
     const bs = 'font:inherit;padding:6px 12px;border-radius:10px;border:0;background:#4f7cff;color:#fff';
-    const reply = (v) => { push('info', 'keal', [v]); card.remove(); };
+    const reply = (v) => { push('info', 'user', [v]); card.remove(); };
     for (const b of (buttons || [])) { const x = document.createElement('button'); x.textContent = b; x.style.cssText = bs; x.onclick = () => reply(b); row.appendChild(x); }
     const inp = document.createElement('input');
     inp.placeholder = 'Reply to Claude…';
@@ -269,7 +269,7 @@ function agentMain() {
   }
   window.__prSay = say;
   const CMDS = {
-    async say(a) { say(String(a.text || ''), a.buttons); return 'shown on the phone; replies show up in get_logs as src "keal"'; },
+    async say(a) { say(String(a.text || ''), a.buttons); return 'shown on the phone; replies show up in get_logs as src "user"'; },
     async device_info() {
       const info = basicInfo(); const n = navigator;
       try { const est = await n.storage.estimate(); info.storage = { quotaMB: Math.round(est.quota / 1048576), usageMB: Math.round(est.usage / 1048576) }; } catch (e) {}
@@ -531,13 +531,14 @@ const worker = {
       return handleMcp(req, hub());
     }
     if (p === '/') return new Response('phone-relay', { headers: { 'content-type': 'text/plain' } });
-    // Mirror kealjones.com (Squiggle + PR previews) on this origin, with agent.js injected into HTML, so pages run top-level with the relay attached.
-    if (req.method !== 'GET' && req.method !== 'HEAD') return new Response('not found', { status: 404 });
-    const up = await fetch('https://kealjones.com' + p + (url.search ? url.search + '&' : '?') + '__pr=' + Date.now(), {   // fresh query: GitHub Pages' CDN keeps files ~10 min
+    // Mirror MIRROR_ORIGIN (optional, e.g. https://example.com) on this origin, with agent.js injected into HTML, so its pages run top-level with the relay attached.
+    const mirror = (env.MIRROR_ORIGIN || '').replace(/\/+$/, '');
+    if (!mirror || (req.method !== 'GET' && req.method !== 'HEAD')) return new Response('not found', { status: 404 });
+    const up = await fetch(mirror + p + (url.search ? url.search + '&' : '?') + '__pr=' + Date.now(), {   // fresh query: CDNs like GitHub Pages' keep files ~10 min
  redirect: 'manual', headers: { 'user-agent': req.headers.get('user-agent') || 'phone-relay', accept: req.headers.get('accept') || '*/*' } });
     const hh = new Headers(up.headers);
     const loc = hh.get('location');
-    if (loc) hh.set('location', loc.replace(/^https?:\/\/(www\.)?kealjones\.(com|github\.io)/i, url.origin));
+    if (loc && loc.startsWith(mirror)) hh.set('location', url.origin + loc.slice(mirror.length));
     hh.set('cache-control', 'no-store'); hh.delete('content-length'); hh.delete('content-encoding'); hh.delete('content-security-policy');
     if ((hh.get('content-type') || '').includes('text/html') && up.status === 200) {
       const tag = '<meta name="referrer" content="no-referrer"><script src="/agent.js?k=' + env.PAGE_KEY + '&v=' + Date.now() + '"></script>';   // per-response version: the page's service worker caches same-origin scripts

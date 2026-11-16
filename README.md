@@ -16,8 +16,9 @@ One Cloudflare Worker, `worker.js`, with no build step:
   `device_info`, `run_js`, `snapshot`, `click`, `type`, `screenshot` (html2canvas), `set_html`, `open_url`,
   `reload`, `say`, `get_logs`.
 - **`/run.js`** serves `run_js` code as a script, for pages whose CSP blocks eval.
-- **Everything else** mirrors kealjones.com with the agent injected, so Squiggle and its PR previews run top-level
-  with the relay attached. To mirror another site, change the upstream at the bottom of `worker.js`.
+- **Everything else** mirrors `MIRROR_ORIGIN` (optional) with the agent injected, so your own site runs top-level
+  on the relay's origin with the relay attached. That's the way to test a real app, not just a page in the iframe:
+  `https://phone-relay.<you>.workers.dev/some/path` loads `MIRROR_ORIGIN/some/path`. Unset, those paths are 404.
 
 ## Deploy
 
@@ -26,6 +27,10 @@ npx wrangler deploy
 npx wrangler secret put MCP_KEY    # any long random string
 npx wrangler secret put PAGE_KEY   # another one
 ```
+
+To mirror a site, set `MIRROR_ORIGIN` under `[vars]` in `wrangler.toml` (for example `https://example.com`).
+The mirror strips the site's CSP header and adds `'unsafe-eval'` to a CSP meta tag so `run_js` works, so point it
+only at a site you own.
 
 Then add `https://phone-relay.<you>.workers.dev/mcp/<MCP_KEY>` as a connector. On the phone, open
 `/p/<PAGE_KEY>` and keep Safari in front.
@@ -36,4 +41,4 @@ Then add `https://phone-relay.<you>.workers.dev/mcp/<MCP_KEY>` as a connector. O
   page key can connect a tab or run code through `/run.js`.
 - If the phone locks or Safari goes to the background, the tab goes offline until it's in front again. iOS also
   kills tabs that use too much memory. `get_logs` flags a reload that wasn't asked for.
-- `say` puts a card over the page. Replies come back in `get_logs` with `src: "keal"`.
+- `say` puts a card over the page. Replies come back in `get_logs` with `src: "user"`.

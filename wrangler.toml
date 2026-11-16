@@ -2,6 +2,9 @@ name = "phone-relay"
 main = "worker.js"
 compatibility_date = "2025-10-01"
 
+[vars]
+# MIRROR_ORIGIN = "https://example.com"   # optional: serve this site through the relay with the agent injected
+
 [[durable_objects.bindings]]
 name = "HUB"
 class_name = "Hub"
