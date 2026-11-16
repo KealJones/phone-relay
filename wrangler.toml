@@ -1,0 +1,15 @@
+name = "phone-relay"
+main = "worker.js"
+compatibility_date = "2025-10-01"
+
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "Hub"
+
+# shortcut: the live worker was uploaded through the API with no migration tag; if `wrangler deploy` says Hub
+# already exists, delete this block for that deploy.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Hub"]
+
+# Secrets (wrangler secret put): MCP_KEY (the connector's path, /mcp/<MCP_KEY>) and PAGE_KEY (the phone page, /p/<PAGE_KEY>).
